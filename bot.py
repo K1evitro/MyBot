@@ -140,7 +140,7 @@ async def handle_review_message(update: Update, context: ContextTypes.DEFAULT_TY
 async def main() -> None:
     logger.info("🚀 Запуск бота...")
 
-    # ✅ НОВЫЙ СПОСОБ: ApplicationBuilder — для PTB 22.4+
+    # ✅ Современный способ для PTB 22.4
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Регистрация обработчиков
