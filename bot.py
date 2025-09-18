@@ -33,6 +33,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     logger.info(f"Пользователь {user_id} (@{update.effective_user.username}) запустил бота")
 
+    # 🔥 ИСПРАВЛЕНО: УБРАНЫ ЛИШНИЕ ПРОБЕЛЫ В URL!
     keyboard = [
         [InlineKeyboardButton("📢 Канал с отзывами", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
         [InlineKeyboardButton("👤 Основной профиль", url=f"https://t.me/{PROFILE_USERNAME.strip('@')}")],
