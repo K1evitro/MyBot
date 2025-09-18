@@ -1,24 +1,39 @@
 import os
 import logging
 from datetime import datetime, timedelta
+from typing import Optional
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+)
 from dotenv import load_dotenv
 
 # === ЗАГРУЗКА ПЕРЕМЕННЫХ ИЗ .env ===
 load_dotenv()
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME")
-PROFILE_USERNAME = os.getenv("PROFILE_USERNAME")
-GROUP_ID = int(os.getenv("GROUP_ID"))
-SPAM_COOLDOWN = int(os.getenv("SPAM_COOLDOWN", 60))
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+BOT_TOKEN: str = os.getenv("BOT_TOKEN", "").strip()
+CHANNEL_USERNAME: str = os.getenv("CHANNEL_USERNAME", "").strip()
+PROFILE_USERNAME: str = os.getenv("PROFILE_USERNAME", "").strip()
+GROUP_ID: int = int(os.getenv("GROUP_ID", "0"))
+SPAM_COOLDOWN: int = int(os.getenv("SPAM_COOLDOWN", "60"))
+LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
+
+# === ВАЛИДАЦИЯ ОБЯЗАТЕЛЬНЫХ ПЕРЕМЕННЫХ ===
+if not BOT_TOKEN:
+    raise ValueError("❌ Токен бота не найден. Убедитесь, что BOT_TOKEN задан в .env")
+if GROUP_ID == 0:
+    raise ValueError("❌ GROUP_ID не установлен или равен 0")
 
 # === НАСТРОЙКА ЛОГИРОВАНИЯ ===
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=getattr(logging, LOG_LEVEL.upper()),
+    level=getattr(logging, LOG_LEVEL),
     handlers=[
         logging.FileHandler("bot.log", encoding="utf-8"),
         logging.StreamHandler()
@@ -26,17 +41,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-user_last_review = {}
+# === ХРАНЕНИЕ ВРЕМЕНИ ПОСЛЕДНЕГО ОТЗЫВА ===
+user_last_review: dict[int, datetime] = {}
 
 # === КОМАНДА /start ===
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    logger.info(f"Пользователь {user_id} (@{update.effective_user.username}) запустил бота")
+    username = update.effective_user.username or update.effective_user.first_name
+    logger.info(f"Пользователь {user_id} (@{username}) запустил бота")
 
-    # 🔥 ИСПРАВЛЕНО: УБРАНЫ ЛИШНИЕ ПРОБЕЛЫ В URL!
     keyboard = [
-        [InlineKeyboardButton("📢 Канал с отзывами", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
-        [InlineKeyboardButton("👤 Основной профиль", url=f"https://t.me/{PROFILE_USERNAME.strip('@')}")],
+        [InlineKeyboardButton("📢 Канал с отзывами", url=f"https://t.me/{CHANNEL_USERNAME.lstrip('@')}")],
+        [InlineKeyboardButton("👤 Основной профиль", url=f"https://t.me/{PROFILE_USERNAME.lstrip('@')}")],
         [InlineKeyboardButton("📝 Оставить отзыв", callback_data="leave_review")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -47,7 +63,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # === НАЖАТИЕ НА КНОПКУ "Оставить отзыв" ===
-async def leave_review_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def leave_review_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     user_id = query.from_user.id
 
@@ -79,7 +95,7 @@ def is_valid_review(text: str) -> tuple[bool, str]:
     return True, ""
 
 # === ОБРАБОТКА ТЕКСТА ОТЗЫВА ===
-async def handle_review_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_review_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id
     message_text = update.message.text
@@ -120,32 +136,26 @@ async def handle_review_message(update: Update, context: ContextTypes.DEFAULT_TY
 
     context.user_data['awaiting_review'] = False
 
-# === ПРОВЕРКА ДОСТУПА К ГРУППЕ ===
-async def check_group_access(application):
-    try:
-        await application.bot.get_chat(GROUP_ID)
-        logger.info(f"✅ Успешно получена информация о группе {GROUP_ID}. Доступ есть.")
-    except Exception as e:
-        logger.critical(f"❌ Бот не имеет доступа к группе {GROUP_ID}. Ошибка: {e}")
-        raise SystemExit("Бот не может работать без доступа к группе отзывов!")
-
 # === ЗАПУСК БОТА ===
-def main():
-    if not BOT_TOKEN:
-        logger.critical("❌ Токен бота не найден. Проверьте .env файл!")
-        exit(1)
-
+async def main() -> None:
     logger.info("🚀 Запуск бота...")
-    app = Application.builder().token(BOT_TOKEN).build()
 
-    # Проверяем доступ к группе
-    app.add_error_handler(lambda u, c: logger.error(f"Ошибка обработки: {c.error}"))
+    # ✅ НОВЫЙ СПОСОБ: ApplicationBuilder — для PTB 22.4+
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # Регистрация обработчиков
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(leave_review_button, pattern="^leave_review$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_review_message))
 
-    app.run_polling()
+    # Добавляем обработчик ошибок
+    app.add_error_handler(lambda u, c: logger.error(f"Ошибка обработки: {c.error}"))
 
+    # Запуск бота
+    logger.info("✅ Бот запущен и готов к работе!")
+    await app.run_polling()
+
+# === ТОЧКА ВХОДА ===
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
