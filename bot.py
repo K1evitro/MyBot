@@ -136,8 +136,8 @@ async def handle_review_message(update: Update, context: ContextTypes.DEFAULT_TY
 
     context.user_data['awaiting_review'] = False
 
-# === ЗАПУСК БОТА ===
-async def main() -> None:
+# === ЗАПУСК БОТА — БЕЗ asyncio.run()! ===
+def main() -> None:
     logger.info("🚀 Запуск бота...")
 
     # ✅ Современный способ для PTB 22.4
@@ -151,11 +151,10 @@ async def main() -> None:
     # Добавляем обработчик ошибок
     app.add_error_handler(lambda u, c: logger.error(f"Ошибка обработки: {c.error}"))
 
-    # Запуск бота
+    # ✅ ЗАПУСКАЕМ БОТА — без asyncio.run()!
     logger.info("✅ Бот запущен и готов к работе!")
-    await app.run_polling()
+    app.run_polling()
 
-# === ТОЧКА ВХОДА ===
+# === ТОЧКА ВХОДА — просто вызываем main() ===
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
